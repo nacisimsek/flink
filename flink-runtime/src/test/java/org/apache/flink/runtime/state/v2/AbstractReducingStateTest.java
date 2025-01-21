@@ -91,6 +91,7 @@ public class AbstractReducingStateTest extends AbstractKeyedStateTestBase {
                         100,
                         10000,
                         1,
+                        null,
                         null);
         AbstractReducingState<String, String, Integer> reducingState =
                 new AbstractReducingState<>(aec, descriptor);
@@ -184,6 +185,11 @@ public class AbstractReducingStateTest extends AbstractKeyedStateTestBase {
         @Override
         public StateRequestContainer createStateRequestContainer() {
             return new MockStateRequestContainer();
+        }
+
+        @Override
+        public void executeRequestSync(StateRequest<?, ?, ?, ?> stateRequest) {
+            throw new UnsupportedOperationException("Unsupported synchronous execution");
         }
 
         @Override

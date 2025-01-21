@@ -40,7 +40,7 @@ import org.apache.flink.streaming.api.operators.AbstractStreamOperator;
 import org.apache.flink.streaming.api.operators.Input;
 import org.apache.flink.streaming.api.operators.InternalTimeServiceManager;
 import org.apache.flink.streaming.api.operators.InternalTimerService;
-import org.apache.flink.streaming.api.operators.StreamTaskStateInitializer;
+import org.apache.flink.streaming.api.operators.InternalTimerServiceAsyncImpl;
 import org.apache.flink.streaming.api.operators.Triggerable;
 import org.apache.flink.streaming.api.operators.TwoInputStreamOperator;
 import org.apache.flink.streaming.api.watermark.Watermark;
@@ -90,9 +90,7 @@ public abstract class AbstractAsyncStateStreamOperator<OUT> extends AbstractStre
 
     /** Initialize necessary state components for {@link AbstractStreamOperator}. */
     @Override
-    public void initializeState(StreamTaskStateInitializer streamTaskStateManager)
-            throws Exception {
-        super.initializeState(streamTaskStateManager);
+    public final void beforeInitializeStateHandler() {
         KeyedStateStore stateStore = stateHandler.getKeyedStateStore().orElse(null);
         if (stateStore instanceof DefaultKeyedStateStore) {
             ((DefaultKeyedStateStore) stateStore).setSupportKeyedStateApiSetV2();
@@ -123,7 +121,8 @@ public abstract class AbstractAsyncStateStreamOperator<OUT> extends AbstractStre
                                 asyncBufferSize,
                                 asyncBufferTimeout,
                                 inFlightRecordsLimit,
-                                asyncKeyedStateBackend);
+                                asyncKeyedStateBackend,
+                                getMetricGroup().addGroup("asyncStateProcessing"));
                 asyncKeyedStateBackend.setup(asyncExecutionController);
                 if (asyncKeyedStateBackend instanceof AsyncKeyedStateBackendAdaptor) {
                     LOG.warn(
@@ -238,7 +237,7 @@ public abstract class AbstractAsyncStateStreamOperator<OUT> extends AbstractStre
     }
 
     /** Create new state (v2) based on new state descriptor. */
-    protected <N, S extends State, T> S getOrCreateKeyedState(
+    public <N, S extends State, T> S getOrCreateKeyedState(
             @Nonnull N defaultNamespace,
             @Nonnull TypeSerializer<N> namespaceSerializer,
             @Nonnull StateDescriptor<T> stateDescriptor)
@@ -293,12 +292,11 @@ public abstract class AbstractAsyncStateStreamOperator<OUT> extends AbstractStre
         checkState(keySerializer != null, "Timers can only be used on keyed operators.");
         // A {@link RecordContext} will be set as the current processing context to preserve record
         // order when the given {@link Triggerable} is invoked.
-        return keyedTimeServiceHandler.getAsyncInternalTimerService(
-                name,
-                keySerializer,
-                namespaceSerializer,
-                triggerable,
-                (AsyncExecutionController<K>) asyncExecutionController);
+        InternalTimerService<N> service =
+                keyedTimeServiceHandler.getInternalTimerService(
+                        name, keySerializer, namespaceSerializer, triggerable);
+        ((InternalTimerServiceAsyncImpl<K, N>) service).setup(asyncExecutionController);
+        return service;
     }
 
     @Override

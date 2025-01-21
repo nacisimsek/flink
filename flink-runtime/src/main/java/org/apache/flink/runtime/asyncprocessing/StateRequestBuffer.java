@@ -148,14 +148,9 @@ public class StateRequestBuffer<K> implements Closeable {
     }
 
     void enqueueToActive(StateRequest<K, ?, ?, ?> request) {
-        if (request.getRequestType() == StateRequestType.SYNC_POINT) {
-            request.getFuture().complete(null);
-        } else {
-            activeQueue.add(request);
-            if (bufferTimeout > 0 && seqAndTimeout == null) {
-                seqAndTimeout =
-                        Tuple2.of(currentSeq.get(), System.currentTimeMillis() + bufferTimeout);
-            }
+        activeQueue.add(request);
+        if (bufferTimeout > 0 && seqAndTimeout == null) {
+            seqAndTimeout = Tuple2.of(currentSeq.get(), System.currentTimeMillis() + bufferTimeout);
         }
     }
 
@@ -221,6 +216,15 @@ public class StateRequestBuffer<K> implements Closeable {
      */
     int blockingQueueSize() {
         return blockingQueueSize;
+    }
+
+    /**
+     * Get the number of different keys in blocking queue.
+     *
+     * @return the number of different keys in blocking queue.
+     */
+    int blockingKeyNum() {
+        return blockingQueue.size();
     }
 
     /**
